@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wander — a local-first travel agent</title>
+<meta name="description" content="A travel-planning AI agent that runs entirely on your own machine. No cloud, no API keys, no billing — local Ollama model, SQLite, and keyless open APIs." />
+<link rel="stylesheet" href="./style.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='50' font-size='50'>🧭</text></svg>" />
+</head>
+<body>
+<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="logo" aria-hidden="true">🧭</div>
+    <h1>Wander</h1>
+    <p class="tag">A travel-planning agent that runs entirely on your own machine.</p>
+    <p class="sub">Real weather, real local time, real exchange rates, real places from OpenStreetMap,
+       real photographs. No cloud, no API keys, no billing account — if your laptop boots, the agent runs.</p>
+    <div class="badges">
+      <span class="badge zero">$0 to run</span>
+      <span class="badge">🦙 Local Ollama</span>
+      <span class="badge">🗄️ SQLite</span>
+      <span class="badge">🔑 Keyless APIs</span>
+      <span class="badge">⚡ FastAPI + SSE</span>
+      <span class="badge">🔒 No account</span>
+    </div>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/ysultankpg/wander">View on GitHub</a>
+      <a class="btn" href="#run">Run it locally</a>
+    </div>
+  </div>
+</header>
+
+<section id="what">
+  <div class="wrap">
+    <h2>What it does</h2>
+    <p class="lead">Tell it your season, budget, and what you actually enjoy. It shortlists real
+      destinations, checks live conditions, and builds a grounded day-by-day plan — inventing nothing.</p>
+    <div class="grid">
+      <div class="card"><div class="ic">🌦️</div><h3>Live weather &amp; time</h3><p>Current conditions and a short forecast for anywhere on earth, plus correct local time via IANA timezones — from Open-Meteo, keyless.</p></div>
+      <div class="card"><div class="ic">💱</div><h3>Real exchange rates</h3><p>Budget conversions computed against the European Central Bank's daily reference rates via Frankfurter — never estimated in the model's head.</p></div>
+      <div class="card"><div class="ic">📍</div><h3>Real places</h3><p>Temples, cafés, viewpoints and museums pulled from OpenStreetMap's Overpass API — actual named features, not plausible-sounding fabrications.</p></div>
+      <div class="card"><div class="ic">📸</div><h3>Real photographs</h3><p>Destination imagery from Wikimedia Commons. When no photo exists it says so, rather than faking a broken file.</p></div>
+      <div class="card"><div class="ic">🧠</div><h3>Remembers you</h3><p>Diet, allergies, budget ceilings and travel style persist in SQLite across sessions — and are checked before any food recommendation.</p></div>
+      <div class="card"><div class="ic">🛡️</div><h3>Grounded by design</h3><p>Strict rules forbid inventing prices, hours or flights. Tool failures are shown honestly instead of being papered over with a guess.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="stack">
+  <div class="wrap">
+    <h2>Rebuilt to cost nothing</h2>
+    <p class="lead">The original was a billed Google Cloud deployment that broke when its lab project expired.
+      Every paid piece was replaced with a free, local, or keyless equivalent.</p>
+    <table class="stack">
+      <thead><tr><th>Concern</th><th>Before (billed)</th><th>Now (free)</th><th>Cost</th></tr></thead>
+      <tbody>
+        <tr><td>Model</td><td class="old">Vertex AI Gemini</td><td class="new">Ollama · Llama 3.1 8B, local</td><td><span class="cost">$0</span></td></tr>
+        <tr><td>Memory</td><td class="old">Vertex AI Memory Bank</td><td class="new">SQLite</td><td><span class="cost">$0</span></td></tr>
+        <tr><td>Catalog</td><td class="old">Firestore</td><td class="new">SQLite · 18 destinations</td><td><span class="cost">$0</span></td></tr>
+        <tr><td>Weather &amp; time</td><td class="old">invented by the model</td><td class="new">Open-Meteo</td><td><span class="cost">$0</span></td></tr>
+        <tr><td>Exchange rates</td><td class="old">invented</td><td class="new">Frankfurter · ECB</td><td><span class="cost">$0</span></td></tr>
+        <tr><td>Places</td><td class="old">Google Places</td><td class="new">OpenStreetMap Overpass</td><td><span class="cost">$0</span></td></tr>
+        <tr><td>Photos</td><td class="old">a 44-byte fake file</td><td class="new">Wikimedia Commons</td><td><span class="cost">$0</span></td></tr>
+        <tr><td>Serving</td><td class="old">Cloud Run + Agent Engine</td><td class="new">uvicorn on localhost</td><td><span class="cost">$0</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How a turn works</h2>
+    <p class="lead">A bounded tool-calling loop: the model plans, calls real tools, and only then writes the answer.</p>
+    <div class="steps">
+      <div class="step"><h3>Understand</h3><p>The local model reads your request alongside what it already knows about you from SQLite memory.</p></div>
+      <div class="step"><h3>Call tools</h3><p>It requests weather, time, FX, places or catalog lookups. They run concurrently against the live keyless APIs.</p></div>
+      <div class="step"><h3>Ground</h3><p>Results — or honest errors — feed back in. Nothing is invented; an empty result never becomes a fabricated one.</p></div>
+      <div class="step"><h3>Answer</h3><p>The reply streams to the browser token by token over SSE, with tables, real photos and a grounded plan.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="run">
+  <div class="wrap">
+    <h2>Run it locally</h2>
+    <p class="lead">Three commands to get the model, three to serve the app. Everything stays on your machine.</p>
+<pre><span class="c"># 1 — install and start the local model</span>
+brew install ollama
+brew services start ollama
+ollama pull llama3.1:8b
+
+<span class="c"># 2 — set up and serve Wander</span>
+cd wander
+uv venv --python 3.11
+uv pip install --python .venv/bin/python fastapi "uvicorn[standard]" httpx itsdangerous
+./run.sh</pre>
+    <p class="note">Then open <b>http://localhost:8000</b> — the chat interface is served at the root URL.
+      This showcase page is static; the live agent needs the local server, Ollama and SQLite, which
+      is why it can't be hosted here on GitHub Pages.</p>
+    <div class="cta" style="margin-top:34px">
+      <a class="btn primary" href="https://github.com/ysultankpg/wander">Get the code</a>
+      <a class="btn" href="https://github.com/ysultankpg/wander/blob/main/README.md">Read the README</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>Built by <a href="https://yousufsultan.netlify.app">Yousuf Sultan</a> ·
+       <a href="https://github.com/ysultankpg/wander">github.com/ysultankpg/wander</a></p>
+    <p>Local-first · keyless · zero-billing.</p>
+  </div>
+</footer>
+</body>
+</html>
