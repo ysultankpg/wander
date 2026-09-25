@@ -14,8 +14,10 @@ this module hides:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
+import random
 from collections.abc import AsyncIterator
 
 import httpx
@@ -151,6 +153,40 @@ async def _ollama_stream(client, messages):
 
 # ----------------------------------------------------------------------- groq
 
+GROQ_MAX_RETRIES = 4
+
+
+def _retry_after(resp: httpx.Response, attempt: int) -> float:
+    """How long to wait before a 429/5xx retry. Honour Groq's Retry-After
+    header when present; otherwise exponential backoff + jitter."""
+    hdr = resp.headers.get("retry-after")
+    if hdr:
+        try:
+            return min(float(hdr), 12.0) + random.uniform(0.0, 0.3)
+        except ValueError:
+            pass
+    return min(10.0, 0.8 * (2 ** attempt)) + random.uniform(0.0, 0.4)
+
+
+async def _groq_post(client, payload):
+    """POST to Groq, retrying 429/5xx with backoff. Raises LLMError with a
+    user-safe message once retries are exhausted. Used by the non-streaming path
+    and to open the streaming connection."""
+    last = None
+    for attempt in range(GROQ_MAX_RETRIES + 1):
+        resp = await client.post(f"{GROQ_BASE}/chat/completions", json=payload,
+                                 headers=_groq_headers(), timeout=TIMEOUT)
+        if resp.status_code in (429, 502, 503, 504) and attempt < GROQ_MAX_RETRIES:
+            last = resp.status_code
+            await asyncio.sleep(_retry_after(resp, attempt))
+            continue
+        if resp.status_code == 429:
+            raise LLMError("The model backend is busy (free-tier rate limit). Wait ~30s and retry.")
+        resp.raise_for_status()
+        return resp
+    raise LLMError(f"The model backend kept refusing (HTTP {last}). Wait a moment and retry.")
+
+
 async def _groq_complete(client, messages, tools):
     if not GROQ_KEY:
         raise LLMError("GROQ_API_KEY is not set.")
@@ -158,9 +194,7 @@ async def _groq_complete(client, messages, tools):
     if tools:
         payload["tools"] = tools
         payload["tool_choice"] = "auto"
-    resp = await client.post(f"{GROQ_BASE}/chat/completions", json=payload,
-                             headers=_groq_headers(), timeout=TIMEOUT)
-    resp.raise_for_status()
+    resp = await _groq_post(client, payload)
     choice = (resp.json().get("choices") or [{}])[0]
     return _clean(choice.get("message") or {})
 
@@ -169,24 +203,36 @@ async def _groq_stream(client, messages):
     if not GROQ_KEY:
         raise LLMError("GROQ_API_KEY is not set.")
     payload = {"model": MODEL, "messages": messages, "stream": True, "temperature": 0.4}
-    async with client.stream("POST", f"{GROQ_BASE}/chat/completions", json=payload,
-                             headers=_groq_headers(), timeout=TIMEOUT) as resp:
-        resp.raise_for_status()
-        async for line in resp.aiter_lines():
-            line = line.strip()
-            if not line.startswith("data:"):
+    # Retry the 429/5xx on the initial connection with backoff, then stream.
+    last = None
+    for attempt in range(GROQ_MAX_RETRIES + 1):
+        async with client.stream("POST", f"{GROQ_BASE}/chat/completions", json=payload,
+                                 headers=_groq_headers(), timeout=TIMEOUT) as resp:
+            if resp.status_code in (429, 502, 503, 504) and attempt < GROQ_MAX_RETRIES:
+                last = resp.status_code
+                await resp.aread()
+                await asyncio.sleep(_retry_after(resp, attempt))
                 continue
-            data = line[5:].strip()
-            if data == "[DONE]":
-                return
-            try:
-                chunk = json.loads(data)
-            except json.JSONDecodeError:
-                continue
-            delta = ((chunk.get("choices") or [{}])[0]).get("delta") or {}
-            piece = delta.get("content") or ""
-            if piece:
-                yield piece
+            if resp.status_code == 429:
+                raise LLMError("The model backend is busy (free-tier rate limit). Wait ~30s and retry.")
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                line = line.strip()
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    return
+                try:
+                    chunk = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                delta = ((chunk.get("choices") or [{}])[0]).get("delta") or {}
+                piece = delta.get("content") or ""
+                if piece:
+                    yield piece
+            return
+    raise LLMError(f"The model backend kept refusing (HTTP {last}). Wait a moment and retry.")
 
 
 def _clean(message: dict) -> dict:
