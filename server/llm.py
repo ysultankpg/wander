@@ -27,7 +27,7 @@ GROQ_BASE = os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
 GROQ_KEY = os.environ.get("GROQ_API_KEY", "")
 
 if BACKEND == "groq":
-    MODEL = os.environ.get("WANDER_MODEL", "llama-3.1-8b-instant")
+    MODEL = os.environ.get("WANDER_MODEL", "openai/gpt-oss-20b")
 else:
     MODEL = os.environ.get("WANDER_MODEL", "llama3.1:8b")
 

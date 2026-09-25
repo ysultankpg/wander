@@ -24,8 +24,8 @@ Accepted trade-offs for $0:
 1. Sign up at <https://console.groq.com> (no credit card).
 2. Create an API key. Copy it — you set it as a secret in step 3, never in code.
 
-The default hosted model is `llama-3.1-8b-instant` — the same 8B Llama family you
-run locally, so behaviour is consistent.
+The default hosted model is `openai/gpt-oss-20b` — a solid free-tier Groq model with
+tool-calling support, consistent with the local Ollama build's behaviour.
 
 ## Step 2 — pick a host (both free, no card)
 
@@ -53,7 +53,7 @@ Your live URL will be `https://wander-<hash>.onrender.com`.
 Once deployed, hit `https://<your-url>/api/health`. Expect:
 
 ```json
-{"ok": true, "detail": "groq ready", "backend": "groq", "model": "llama-3.1-8b-instant"}
+{"ok": true, "detail": "groq ready", "backend": "groq", "model": "openai/gpt-oss-20b"}
 ```
 
 If `ok` is false, `detail` tells you what's wrong — almost always a missing or

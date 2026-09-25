@@ -13,7 +13,7 @@ services:
       - key: WANDER_BACKEND
         value: groq
       - key: WANDER_MODEL
-        value: llama-3.1-8b-instant
+        value: openai/gpt-oss-20b
       - key: COOKIE_SECURE
         value: "1"
       - key: GROQ_API_KEY

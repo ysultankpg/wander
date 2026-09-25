@@ -15,7 +15,7 @@ COPY web/ ./web/
 
 # Hosted build talks to Groq, not a local model.
 ENV WANDER_BACKEND=groq \
-    WANDER_MODEL=llama-3.1-8b-instant \
+    WANDER_MODEL=openai/gpt-oss-20b \
     HOST=0.0.0.0 \
     PORT=8000 \
     COOKIE_SECURE=1
