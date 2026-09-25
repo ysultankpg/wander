@@ -9,6 +9,7 @@ Two deliberate choices carried over from the review of the old code:
 from __future__ import annotations
 
 import asyncio
+import random
 
 import httpx
 
@@ -22,7 +23,7 @@ def client() -> httpx.AsyncClient:
         _client = httpx.AsyncClient(
             timeout=TIMEOUT,
             follow_redirects=True,
-            headers={"User-Agent": "Wander/1.0 (local travel agent)"},
+            headers={"User-Agent": "Wander/1.0 (travel agent; contact via github.com/ysultankpg/wander)"},
             limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
         )
     return _client
@@ -35,20 +36,34 @@ async def aclose() -> None:
     _client = None
 
 
-async def get_json(url: str, params: dict | None = None, retries: int = 2) -> dict:
+def _backoff(attempt: int) -> float:
+    """Exponential backoff with jitter: ~0.8, 1.6, 3.2, 6.4s, capped at 8s.
+
+    Free community endpoints (Open-Meteo, Overpass, Nominatim) throttle by IP,
+    and shared cloud hosts land on already-hot IPs — so a throttle window needs
+    seconds, not milliseconds, to clear. Jitter avoids lock-step retries."""
+    return min(8.0, 0.8 * (2 ** attempt)) + random.uniform(0.0, 0.4)
+
+
+async def get_json(
+    url: str,
+    params: dict | None = None,
+    retries: int = 4,
+    headers: dict | None = None,
+) -> dict:
     """GET JSON, returning {"error": msg} instead of raising.
 
-    The free community endpoints (Open-Meteo, Overpass) throttle bursts, so a
-    429/5xx is retried with backoff. Anything still failing is reported as an
+    The free community endpoints throttle bursts, so a 429/5xx is retried with
+    exponential backoff + jitter. Anything still failing is reported as an
     explicit error — never as a silently empty result, which would let the model
     narrate missing data as if it were real.
     """
     last = "unknown error"
     for attempt in range(retries + 1):
         try:
-            resp = await client().get(url, params=params)
+            resp = await client().get(url, params=params, headers=headers)
             if resp.status_code in (429, 502, 503, 504) and attempt < retries:
-                await asyncio.sleep(0.6 * (attempt + 1))
+                await asyncio.sleep(_backoff(attempt))
                 last = f"HTTP {resp.status_code}"
                 continue
             resp.raise_for_status()
@@ -56,7 +71,7 @@ async def get_json(url: str, params: dict | None = None, retries: int = 2) -> di
         except httpx.TimeoutException:
             last = "timeout"
             if attempt < retries:
-                await asyncio.sleep(0.6 * (attempt + 1))
+                await asyncio.sleep(_backoff(attempt))
                 continue
             return {"error": "That lookup timed out. Try again in a moment."}
         except httpx.HTTPStatusError as exc:

@@ -12,7 +12,13 @@ from zoneinfo import ZoneInfo
 from .http import get_json
 
 GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
+NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+
+# Resolved places are cached for the process lifetime. Coordinates don't change,
+# so this both cuts request volume (the biggest cause of shared-IP throttling)
+# and lets a place resolve once even if the geocoder is briefly rate-limited.
+_PLACE_CACHE: dict[str, dict] = {}
 
 # WMO weather interpretation codes -> plain English.
 WMO = {
@@ -32,10 +38,30 @@ WMO = {
 
 
 async def resolve_place(place: str) -> dict:
-    """Turn a free-text place name into coordinates + timezone."""
+    """Turn a free-text place name into coordinates + timezone.
+
+    Tries Open-Meteo's geocoder first (it returns the IANA timezone directly).
+    If that is throttled or finds nothing, falls back to OpenStreetMap's
+    Nominatim — a fully independent keyless geocoder — so a rate-limit on one
+    provider is not fatal. Successful results are cached for the process life."""
     if not place or not place.strip():
         return {"error": "Please provide a place name."}
-    data = await get_json(GEOCODE_URL, {"name": place.strip(), "count": 1, "language": "en"})
+    key = place.strip().lower()
+    if key in _PLACE_CACHE:
+        return _PLACE_CACHE[key]
+
+    resolved = await _resolve_open_meteo(place.strip())
+    if "error" in resolved:
+        fallback = await _resolve_nominatim(place.strip())
+        if "error" not in fallback:
+            resolved = fallback
+    if "error" not in resolved:
+        _PLACE_CACHE[key] = resolved
+    return resolved
+
+
+async def _resolve_open_meteo(place: str) -> dict:
+    data = await get_json(GEOCODE_URL, {"name": place, "count": 1, "language": "en"})
     if "error" in data:
         return data
     results = data.get("results") or []
@@ -52,6 +78,39 @@ async def resolve_place(place: str) -> dict:
         "timezone": top.get("timezone"),
         "country": top.get("country"),
         "population": top.get("population"),
+    }
+
+
+async def _resolve_nominatim(place: str) -> dict:
+    """Independent keyless geocoder. Nominatim returns no timezone, but the
+    forecast call defaults to timezone=auto, so weather still works; local-time
+    lookups backfill the timezone separately when needed."""
+    data = await get_json(
+        NOMINATIM_URL,
+        {"q": place, "format": "json", "limit": 1, "addressdetails": 1},
+        headers={"Accept": "application/json"},
+    )
+    if "error" in data:
+        return data
+    if not isinstance(data, list) or not data:
+        return {"error": f"Could not find a place called {place!r}."}
+    top = data[0]
+    try:
+        lat = float(top.get("lat"))
+        lon = float(top.get("lon"))
+    except (TypeError, ValueError):
+        return {"error": f"Could not resolve coordinates for {place!r}."}
+    addr = top.get("address") or {}
+    name = (addr.get("city") or addr.get("town") or addr.get("village")
+            or addr.get("state") or top.get("display_name", place).split(",")[0])
+    label = ", ".join(str(p) for p in (name, addr.get("state"), addr.get("country")) if p)
+    return {
+        "name": label or place,
+        "latitude": lat,
+        "longitude": lon,
+        "timezone": None,
+        "country": addr.get("country"),
+        "population": None,
     }
 
 
@@ -110,6 +169,13 @@ async def get_local_time(location: str) -> dict:
         return place
     tz_name = place.get("timezone")
     if not tz_name:
+        # Nominatim path returns no timezone — backfill it from Open-Meteo's
+        # forecast API, which echoes the resolved IANA zone for the coordinates.
+        tz_name = await _timezone_for(place["latitude"], place["longitude"])
+        if tz_name:
+            place["timezone"] = tz_name
+            _PLACE_CACHE[location.strip().lower()] = place
+    if not tz_name:
         return {"error": f"No timezone known for {place['name']}."}
     try:
         now = _dt.datetime.now(ZoneInfo(tz_name))
@@ -126,3 +192,14 @@ async def get_local_time(location: str) -> dict:
         "day_of_week": now.strftime("%A"),
         "utc_offset": f"UTC{sign}{abs(total_min) // 60:02d}:{abs(total_min) % 60:02d}",
     }
+
+
+async def _timezone_for(lat: float, lon: float) -> str | None:
+    """Resolve the IANA timezone for coordinates via Open-Meteo (timezone=auto)."""
+    data = await get_json(FORECAST_URL, {
+        "latitude": lat, "longitude": lon,
+        "current": "temperature_2m", "timezone": "auto",
+    })
+    if "error" in data:
+        return None
+    return data.get("timezone")
