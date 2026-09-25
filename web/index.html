@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wander — your travel planner</title>
+<link rel="preconnect" href="https://upload.wikimedia.org" />
+<link rel="stylesheet" href="/style.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><text y='50' font-size='50'>🧭</text></svg>" />
+</head>
+<body>
+<div class="aurora" aria-hidden="true"><span></span><span></span><span></span></div>
+
+<header class="bar">
+  <div class="brand">
+    <span class="logo" aria-hidden="true">🧭</span>
+    <div>
+      <h1>Wander</h1>
+      <p id="status" class="status"><i class="dot"></i><span>connecting…</span></p>
+    </div>
+  </div>
+  <div class="bar-actions">
+    <button id="theme" class="ghost" title="Toggle light / dark" aria-label="Toggle theme">◐</button>
+    <button id="reset" class="ghost" title="Start a new trip">New trip</button>
+  </div>
+</header>
+
+<main id="thread" class="thread" aria-live="polite">
+  <section class="welcome" id="welcome">
+    <h2>Where are we going?</h2>
+    <p>Real weather, real local time, real exchange rates, real places from
+       OpenStreetMap, real photographs. Nothing invented, nothing billed —
+       this runs entirely on your machine.</p>
+    <div class="chips">
+      <button class="chip" data-q="I have 10 days in March and about $70 a day. Somewhere warm with great food and not too touristy — where should I go?">10 days, $70/day, great food</button>
+      <button class="chip" data-q="Plan a 5-day Kyoto itinerary for late March. I love temples, coffee and walking. I'm vegetarian.">Kyoto in late March</button>
+      <button class="chip" data-q="What's the weather like in Reykjavik right now, and what time is it there?">Weather in Reykjavik</button>
+      <button class="chip" data-q="I'm flying from Hyderabad. Suggest three destinations under $50 a day and convert the trip budget to INR.">Budget trips from Hyderabad</button>
+    </div>
+  </section>
+</main>
+
+<form id="composer" class="composer" autocomplete="off">
+  <div class="field">
+    <textarea id="input" rows="1" maxlength="4000" placeholder="Tell me the season, your budget, and what you actually enjoy…"></textarea>
+    <button id="send" type="submit" aria-label="Send">
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+        <path d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12 2-12 2z" fill="currentColor"/>
+      </svg>
+    </button>
+  </div>
+  <p class="hint">Local model · no API keys · no cloud bill. Prices and opening hours are never invented — verify before booking.</p>
+</form>
+
+<template id="tpl-msg">
+  <article class="msg">
+    <div class="avatar" aria-hidden="true"></div>
+    <div class="body">
+      <div class="tools" hidden></div>
+      <div class="content"></div>
+    </div>
+  </article>
+</template>
+
+<script src="/app.js" type="module"></script>
+</body>
+</html>
