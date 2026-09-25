@@ -1,0 +1,22 @@
+# Render deployment for Wander (free tier, no credit card required).
+# One-time setup: connect the GitHub repo in the Render dashboard, then Render
+# reads this file. Set the two secret env vars in the dashboard (marked sync:false
+# below) — GROQ_API_KEY from console.groq.com, and a random WANDER_SECRET.
+services:
+  - type: web
+    name: wander
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: WANDER_BACKEND
+        value: groq
+      - key: WANDER_MODEL
+        value: llama-3.1-8b-instant
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: GROQ_API_KEY
+        sync: false          # set in dashboard — never commit the key
+      - key: WANDER_SECRET
+        generateValue: true   # Render generates a stable random secret

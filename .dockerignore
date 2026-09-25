@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+wander.db
+docs/
+.git/
+.gitignore
+.DS_Store
+run.sh
+README.md

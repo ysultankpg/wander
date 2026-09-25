@@ -23,7 +23,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from itsdangerous import BadSignature, URLSafeSerializer
 
-from .agent import MODEL, OLLAMA_URL, run_turn
+from . import llm
+from .agent import BACKEND, MODEL, run_turn
 from .tools import http as tool_http
 from .tools import store
 from .tools.seed import seed
@@ -87,15 +88,8 @@ async def _errors(request: Request, exc: Exception) -> JSONResponse:
 
 @app.get("/api/health")
 async def health():
-    ok, detail = True, "ready"
-    try:
-        r = await tool_http.client().get(f"{OLLAMA_URL}/api/tags")
-        names = [m.get("name", "") for m in (r.json().get("models") or [])]
-        if not any(n.startswith(MODEL.split(":")[0]) for n in names):
-            ok, detail = False, f"model {MODEL} not pulled — run: ollama pull {MODEL}"
-    except Exception:
-        ok, detail = False, "ollama unreachable — run: brew services start ollama"
-    return {"ok": ok, "detail": detail, "model": MODEL,
+    ok, detail = await llm.health(tool_http.client())
+    return {"ok": ok, "detail": detail, "model": MODEL, "backend": BACKEND,
             "destinations": store.search_destinations(limit=20)["count"]}
 
 
